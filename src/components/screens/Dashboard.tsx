@@ -1,38 +1,156 @@
 import { useNavigate } from 'react-router-dom';
-import { Play, Flame, Zap, Trophy, Target } from 'lucide-react';
+import { Plus, ChevronRight, Trophy, MapPin, Clock, Users } from 'lucide-react';
 import { useGameStore } from '../../store/gameStore';
-import { Sport } from '../../types';
-import { ACHIEVEMENTS } from '../../utils/achievements';
+import { GameSession, Sport } from '../../types';
 
-const SPORT_CONFIG: Record<Sport, { icon: string; color: string; label: string }> = {
-  cricket: { icon: '🏏', color: 'text-sport-cricket', label: 'Cricket' },
-  badminton: { icon: '🏸', color: 'text-sport-badminton', label: 'Badminton' },
-  pickleball: { icon: '🏓', color: 'text-sport-pickleball', label: 'Pickleball' },
+const SPORT_CONFIG: Record<Sport, { icon: string; label: string; color: string; bg: string }> = {
+  cricket: { icon: '🏏', label: 'Cricket', color: '#22c55e', bg: 'bg-green-500/10' },
+  badminton: { icon: '🏸', label: 'Badminton', color: '#f59e0b', bg: 'bg-amber-500/10' },
+  pickleball: { icon: '🥒', label: 'Pickleball', color: '#06b6d4', bg: 'bg-cyan-500/10' },
+  football: { icon: '⚽', label: 'Football', color: '#f97316', bg: 'bg-orange-500/10' },
+  gym: { icon: '💪', label: 'Gym', color: '#a855f7', bg: 'bg-purple-500/10' },
+  ps5: { icon: '🎮', label: 'PS5', color: '#3b82f6', bg: 'bg-blue-500/10' },
 };
 
-const RESULT_STYLES: Record<string, string> = {
-  win: 'bg-win/20 text-win border-win/30',
-  loss: 'bg-loss/20 text-loss border-loss/30',
-  draw: 'bg-draw/20 text-draw border-draw/30',
-  'no-result': 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+const STATUS_STYLES: Record<string, string> = {
+  open: 'bg-green-500/20 text-green-400',
+  full: 'bg-red-500/20 text-red-400',
+  completed: 'bg-slate-500/20 text-slate-400',
+  cancelled: 'bg-red-900/20 text-red-600',
 };
 
-// Deterministic daily challenge based on date seed
-function getDailyChallenge(dateStr: string) {
-  const seed = dateStr.split('-').reduce((acc, v) => acc + parseInt(v), 0);
-  const challenges = [
-    { sport: 'cricket' as Sport, description: 'Score 50+ runs in a T20 match', xpReward: 150 },
-    { sport: 'badminton' as Sport, description: 'Win a best-of-3 set match', xpReward: 120 },
-    { sport: 'pickleball' as Sport, description: 'Win a doubles game 11-0', xpReward: 200 },
-    { sport: 'cricket' as Sport, description: 'Take 3+ wickets in a T10 match', xpReward: 175 },
-    { sport: 'badminton' as Sport, description: 'Win a game without losing 5 consecutive points', xpReward: 130 },
-    { sport: 'pickleball' as Sport, description: 'Win a singles match 3-0', xpReward: 140 },
-    { sport: 'cricket' as Sport, description: 'Play a T20 match and win by 20+ runs', xpReward: 160 },
-    { sport: 'badminton' as Sport, description: 'Win 2 sets in a row', xpReward: 110 },
-    { sport: 'pickleball' as Sport, description: 'Win a rally scoring game 15-10+', xpReward: 145 },
-    { sport: 'cricket' as Sport, description: 'Complete a full Test match', xpReward: 250 },
-  ];
-  return challenges[seed % challenges.length];
+function formatDate(dateStr: string, timeStr: string): string {
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+  const d = new Date(dateStr);
+  const todayStr = today.toISOString().split('T')[0];
+  const tomStr = tomorrow.toISOString().split('T')[0];
+  if (dateStr === todayStr) return `Today, ${formatTime(timeStr)}`;
+  if (dateStr === tomStr) return `Tomorrow, ${formatTime(timeStr)}`;
+  return `${d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}, ${formatTime(timeStr)}`;
+}
+
+function formatTime(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good morning';
+  if (hour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+function SessionCard({ session, onPress }: { session: GameSession; onPress: () => void }) {
+  const player = useGameStore(s => s.player);
+  const joinSession = useGameStore(s => s.joinSession);
+  const cfg = SPORT_CONFIG[session.sport];
+  const isFull = session.currentPlayers.length >= session.maxPlayers;
+  const isJoined = player ? session.currentPlayers.includes(player.name) : false;
+
+  const handleJoin = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isFull && !isJoined) joinSession(session.id);
+  };
+
+  return (
+    <div
+      onClick={onPress}
+      className="min-w-[260px] bg-bg-card border border-bg-border rounded-2xl overflow-hidden cursor-pointer card-hover"
+    >
+      <div className="h-1.5 w-full" style={{ backgroundColor: cfg.color }} />
+      <div className="p-4">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-2xl">{cfg.icon}</span>
+          <div>
+            <div className="text-white font-semibold text-sm leading-tight">{session.title}</div>
+            <div className="text-slate-500 text-xs">{cfg.label}</div>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 text-slate-400 text-xs mb-1">
+          <Clock size={12} />
+          <span>{formatDate(session.date, session.time)}</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-slate-400 text-xs mb-3">
+          <MapPin size={12} />
+          <span className="truncate">{session.venue}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="text-lg">{session.hostAvatar}</span>
+            <div>
+              <div className="flex items-center gap-1 text-xs text-slate-400">
+                <Users size={11} />
+                <span className="font-semibold" style={{ color: cfg.color }}>
+                  {session.currentPlayers.length}/{session.maxPlayers}
+                </span>
+              </div>
+              <div className="text-xs text-slate-500 capitalize">{session.skillLevel}</div>
+            </div>
+          </div>
+          <button
+            onClick={handleJoin}
+            disabled={isFull || isJoined || session.status !== 'open'}
+            className={`text-xs font-bold py-1.5 px-3 rounded-lg transition-all duration-150 active:scale-95 ${
+              isJoined
+                ? 'bg-green-500/20 text-green-400'
+                : isFull || session.status !== 'open'
+                ? 'bg-bg-border text-slate-500 cursor-not-allowed'
+                : 'bg-accent text-white hover:bg-indigo-500'
+            }`}
+          >
+            {isJoined ? '✓ Joined' : isFull ? 'Full' : 'Join'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MySessions({ sessions }: { sessions: GameSession[] }) {
+  const navigate = useNavigate();
+  if (sessions.length === 0) {
+    return (
+      <div className="bg-bg-card border border-bg-border rounded-2xl p-6 text-center">
+        <div className="text-3xl mb-2">🎯</div>
+        <p className="text-slate-400 text-sm">No sessions yet</p>
+        <p className="text-slate-500 text-xs mt-1">Create one or join a game nearby</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {sessions.slice(0, 3).map(session => {
+        const cfg = SPORT_CONFIG[session.sport];
+        return (
+          <div
+            key={session.id}
+            onClick={() => navigate(`/session/${session.id}`)}
+            className="bg-bg-card border border-bg-border rounded-2xl p-4 flex items-center gap-3 cursor-pointer card-hover"
+          >
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-xl flex-shrink-0"
+              style={{ backgroundColor: `${cfg.color}20` }}
+            >
+              {cfg.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-white text-sm font-semibold truncate">{session.title}</div>
+              <div className="text-slate-400 text-xs">{formatDate(session.date, session.time)}</div>
+            </div>
+            <div className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_STYLES[session.status]}`}>
+              {session.status.charAt(0).toUpperCase() + session.status.slice(1)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 export default function Dashboard() {
@@ -42,201 +160,144 @@ export default function Dashboard() {
 
   if (!player) return null;
 
-  const today = new Date().toISOString().split('T')[0];
-  const todaySessions = sessions.filter(s => s.date.startsWith(today));
-  const todayXp = todaySessions.reduce((sum, s) => sum + s.xpEarned, 0);
-  const hasPlayedToday = todaySessions.length > 0;
-
-  const recentSessions = [...sessions].reverse().slice(0, 3);
-  const winRate = player.totalMatches > 0
-    ? Math.round((player.totalWins / player.totalMatches) * 100)
-    : 0;
-
   const xpPercent = Math.min(100, Math.round((player.xp / player.xpToNextLevel) * 100));
-  const dailyChallenge = getDailyChallenge(today);
 
-  const unlockedCount = player.achievements.length;
-  const latestAchievements = player.achievements
-    .map(id => ACHIEVEMENTS.find(a => a.id === id))
-    .filter(Boolean)
-    .slice(-3)
-    .reverse();
+  const nearbySessions = sessions.filter(
+    s => s.city === player.city && s.status === 'open' && s.date >= new Date().toISOString().split('T')[0]
+  );
+
+  const mySessions = sessions.filter(
+    s =>
+      (s.hostId === player.id || s.currentPlayers.includes(player.name)) &&
+      s.status !== 'cancelled'
+  );
+
+  // Random-ish active player count based on city
+  const cityPlayerCounts: Record<string, number> = {
+    Bangalore: 62, Mumbai: 48, Pune: 31, Hyderabad: 27, Delhi: 39, Chennai: 22, Kolkata: 18,
+  };
+  const activeCount = cityPlayerCounts[player.city] ?? 20;
 
   return (
-    <div className="p-4 space-y-4 animate-fade-in">
-      {/* Player Card */}
-      <div className="bg-gradient-to-br from-bg-card via-bg-card to-accent/10 border border-bg-border rounded-2xl p-5 shadow-xl">
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="text-4xl bg-bg-primary rounded-2xl p-2 shadow-lg">{player.avatar}</div>
-            <div>
-              <h2 className="text-xl font-black text-white">{player.name}</h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs px-2 py-0.5 bg-accent/20 text-accent rounded-full font-semibold border border-accent/30">
-                  {player.title}
+    <div className="px-4 py-6 space-y-6">
+      {/* Greeting + Player Card */}
+      <div className="bg-bg-card border border-bg-border rounded-2xl p-4">
+        <div className="flex items-center gap-3 mb-4">
+          <button
+            onClick={() => navigate('/profile')}
+            className="text-4xl cursor-pointer active:scale-95 transition-transform"
+          >
+            {player.avatar}
+          </button>
+          <div className="flex-1">
+            <p className="text-slate-400 text-sm">{getGreeting()},</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-white font-bold text-lg">{player.name}!</span>
+              {player.streak > 0 && (
+                <span className="flex items-center gap-0.5 text-amber-400 text-sm font-semibold">
+                  🔥 {player.streak} day streak
                 </span>
-                <span className="text-xs text-slate-400">Lv.{player.level}</span>
-              </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white">
+                Lv.{player.level}
+              </span>
+              <span className="text-slate-400 text-xs">{player.title}</span>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 bg-orange-500/20 border border-orange-500/30 rounded-xl px-3 py-2">
-            <Flame size={16} className="text-orange-400" />
-            <span className="text-orange-300 font-bold text-sm">{player.streak}</span>
-          </div>
+          <button onClick={() => navigate('/tournaments')} className="p-2 rounded-xl bg-bg-primary border border-bg-border text-slate-400 hover:text-yellow-400 transition-colors">
+            <Trophy size={18} />
+          </button>
         </div>
 
         {/* XP Bar */}
-        <div className="space-y-1.5">
-          <div className="flex justify-between text-xs">
-            <span className="text-xp font-bold flex items-center gap-1">
-              <Zap size={12} /> {player.xp} XP
-            </span>
-            <span className="text-slate-500">{player.xpToNextLevel} XP to Lv.{player.level + 1}</span>
+        <div>
+          <div className="flex justify-between text-xs text-slate-500 mb-1.5">
+            <span className="text-xp font-semibold">{player.xp} XP</span>
+            <span>{player.xpToNextLevel - player.xp} to Lv.{player.level + 1}</span>
           </div>
-          <div className="h-2.5 bg-bg-primary rounded-full overflow-hidden">
+          <div className="h-2.5 bg-bg-border rounded-full overflow-hidden">
             <div
-              className="h-full bg-gradient-to-r from-xp to-amber-400 rounded-full progress-bar"
+              className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 rounded-full progress-bar"
               style={{ width: `${xpPercent}%` }}
             />
           </div>
-          <div className="text-right text-xs text-slate-600">{xpPercent}%</div>
         </div>
       </div>
 
-      {/* Today's Scene */}
-      <div className="space-y-3">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Today's Scene</h3>
-
-        {/* Main CTA */}
-        <button
-          onClick={() => navigate('/play')}
-          className="w-full py-5 bg-gradient-to-r from-accent via-purple-600 to-indigo-700 rounded-2xl font-black text-white text-xl shadow-lg shadow-accent/30 active:scale-[0.98] transition-all duration-200 flex items-center justify-center gap-3 glow-accent"
-        >
-          <Play size={24} fill="white" />
-          {hasPlayedToday ? 'PLAY AGAIN' : 'PLAY TODAY'}
-        </button>
-
-        {hasPlayedToday && (
-          <div className="bg-bg-card border border-bg-border rounded-xl p-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Target size={16} className="text-accent" />
-              <span className="text-sm text-slate-300">Today's sessions: <span className="font-bold text-white">{todaySessions.length}</span></span>
-            </div>
-            <span className="text-xp font-bold text-sm">+{todayXp} XP</span>
-          </div>
-        )}
-
-        {/* Daily Challenge */}
-        <div className={`bg-bg-card border border-bg-border rounded-xl p-4 ${
-          dailyChallenge.sport === 'cricket' ? 'border-l-2 border-l-sport-cricket' :
-          dailyChallenge.sport === 'badminton' ? 'border-l-2 border-l-sport-badminton' :
-          'border-l-2 border-l-sport-pickleball'
-        }`}>
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-lg">{SPORT_CONFIG[dailyChallenge.sport].icon}</span>
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wide">Daily Challenge</span>
-              </div>
-              <p className="text-sm text-white font-medium">{dailyChallenge.description}</p>
-            </div>
-            <div className="flex items-center gap-1 bg-xp/10 border border-xp/20 rounded-lg px-2 py-1 whitespace-nowrap">
-              <Zap size={12} className="text-xp" />
-              <span className="text-xp text-xs font-bold">+{dailyChallenge.xpReward}</span>
-            </div>
-          </div>
+      {/* Play Today CTA */}
+      <div className="bg-gradient-to-br from-indigo-900/50 to-purple-900/30 border border-accent/30 rounded-2xl p-5">
+        <div className="text-2xl mb-1">🎯</div>
+        <h2 className="text-white font-black text-xl mb-1">Play Today</h2>
+        <p className="text-slate-400 text-sm mb-4">Organise a game or find one near you</p>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/create')}
+            className="flex-1 flex items-center justify-center gap-2 bg-accent hover:bg-indigo-500 text-white font-bold py-3 rounded-xl transition-all duration-200 active:scale-95 glow-accent"
+          >
+            <Plus size={18} />
+            Create Session
+          </button>
+          <button
+            onClick={() => navigate('/find')}
+            className="flex items-center gap-1 text-accent text-sm font-semibold py-3 px-3 rounded-xl border border-accent/30 hover:bg-accent/10 transition-all"
+          >
+            Browse <ChevronRight size={16} />
+          </button>
         </div>
       </div>
 
-      {/* Season Stats */}
+      {/* Sessions Near You */}
       <div>
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1 mb-3">This Season</h3>
-        <div className="grid grid-cols-3 gap-3">
-          {[
-            { label: 'Matches', value: player.seasonMatches, icon: '🎮' },
-            { label: 'Wins', value: player.seasonWins, icon: '🏆' },
-            { label: 'Win Rate', value: `${winRate}%`, icon: '📊' },
-          ].map(stat => (
-            <div key={stat.label} className="bg-bg-card border border-bg-border rounded-xl p-3 text-center">
-              <div className="text-xl mb-1">{stat.icon}</div>
-              <div className="text-xl font-black text-white">{stat.value}</div>
-              <div className="text-xs text-slate-500">{stat.label}</div>
-            </div>
-          ))}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-white font-bold text-base">Sessions near you</h3>
+          <button onClick={() => navigate('/find')} className="text-accent text-sm font-medium flex items-center gap-0.5">
+            See all <ChevronRight size={14} />
+          </button>
         </div>
-      </div>
-
-      {/* Achievements preview */}
-      {unlockedCount > 0 && (
-        <div>
-          <div className="flex justify-between items-center px-1 mb-3">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Recent Badges</h3>
-            <button onClick={() => navigate('/achievements')} className="text-xs text-accent">View all →</button>
-          </div>
-          <div className="flex gap-2">
-            {latestAchievements.map(a => a && (
-              <div key={a.id} className="flex-1 bg-bg-card border border-bg-border rounded-xl p-3 text-center glow-accent">
-                <div className="text-2xl mb-1">{a.icon}</div>
-                <div className="text-xs font-semibold text-white truncate">{a.name}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Recent Matches */}
-      <div>
-        <div className="flex justify-between items-center px-1 mb-3">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Recent Matches</h3>
-          <button onClick={() => navigate('/history')} className="text-xs text-accent">See all →</button>
-        </div>
-
-        {recentSessions.length === 0 ? (
-          <div className="bg-bg-card border border-bg-border rounded-xl p-8 text-center">
-            <div className="text-4xl mb-3">🎮</div>
-            <p className="text-slate-400 text-sm">No matches yet. Hit Play to get started!</p>
+        {nearbySessions.length === 0 ? (
+          <div className="bg-bg-card border border-bg-border rounded-2xl p-5 text-center">
+            <p className="text-slate-400 text-sm">No open sessions in {player.city}</p>
+            <p className="text-slate-500 text-xs mt-1">Be the first — create one!</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {recentSessions.map(session => {
-              const sc = SPORT_CONFIG[session.sport];
-              return (
-                <div key={session.id} className="bg-bg-card border border-bg-border rounded-xl p-4 flex items-center gap-3">
-                  <span className="text-2xl">{sc.icon}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-white text-sm">{sc.label}</span>
-                      <span className="text-xs text-slate-500">· {session.format}</span>
-                    </div>
-                    {session.score && (
-                      <p className="text-xs text-slate-400 truncate">{session.score}</p>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-1">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-bold uppercase ${RESULT_STYLES[session.result]}`}>
-                      {session.result === 'no-result' ? 'NR' : session.result.charAt(0).toUpperCase() + session.result.slice(1)}
-                    </span>
-                    <span className="text-xp text-xs font-semibold">+{session.xpEarned}</span>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+            {nearbySessions.map(s => (
+              <SessionCard
+                key={s.id}
+                session={s}
+                onPress={() => navigate(`/session/${s.id}`)}
+              />
+            ))}
           </div>
         )}
       </div>
 
-      {/* Trophy teaser */}
-      <div
-        onClick={() => navigate('/career')}
-        className="bg-gradient-to-r from-bg-card to-accent/10 border border-bg-border rounded-xl p-4 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all"
-      >
-        <Trophy size={24} className="text-xp" />
-        <div className="flex-1">
-          <p className="text-sm font-bold text-white">View Career Profile</p>
-          <p className="text-xs text-slate-400">{unlockedCount} achievements · Level {player.level}</p>
-        </div>
-        <span className="text-slate-400 text-sm">→</span>
+      {/* My Sessions */}
+      <div>
+        <h3 className="text-white font-bold text-base mb-3">Your sessions</h3>
+        <MySessions sessions={mySessions} />
+        {mySessions.length > 3 && (
+          <button onClick={() => navigate('/find')} className="mt-2 text-accent text-sm font-medium flex items-center gap-0.5">
+            View all sessions <ChevronRight size={14} />
+          </button>
+        )}
       </div>
+
+      {/* Community Pulse */}
+      <div className="bg-bg-card border border-bg-border rounded-2xl p-4 flex items-center gap-3">
+        <div className="text-3xl">🌆</div>
+        <div>
+          <p className="text-white font-semibold text-sm">
+            <span className="text-accent">{activeCount} players</span> active in {player.city} today
+          </p>
+          <p className="text-slate-500 text-xs">Join the community — get out and play!</p>
+        </div>
+      </div>
+
+      {/* Bottom padding for nav */}
+      <div className="h-4" />
     </div>
   );
 }
